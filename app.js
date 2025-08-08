@@ -16,31 +16,19 @@ const LocalStrategy = require("passport-local");
 const bcrypt = require("bcrypt");
 const saltRounds = 10;
 
-const flash = require("connect-flash");
-app.set("views", path.join(__dirname, "views")); //set the views globally
-app.use(flash());
-
-app.use(bodyParser.json()); //for parsing the request body
-
-app.use(express.urlencoded({ extended: false })); //for taking the details from url
-
+app.use(bodyParser.json()); 
+app.use(express.urlencoded({ extended: false })); 
 app.use(cookieParser("shh! some secret string"));
 app.use(csrf("this_should_be_32_character_long", ["POST", "PUT", "DELETE"]));
 
-//for using the login session
 app.use(
   session({
     secret: "my-super-secret-key-21728172615261562",
     cookie: {
-      maxAge: 24 * 60 * 60 * 1000, //24hrs
+      maxAge: 24 * 60 * 60 * 1000,
     },
   }),
 );
-
-app.use((request, response, next) => {
-  response.locals.messages = request.flash(); //allows every ejs files to use flash
-  next();
-});
 
 app.use(passport.initialize());
 app.use(passport.session());
@@ -92,8 +80,6 @@ passport.deserializeUser((id, done) => {
     });
 });
 
-app.set("view engine", "ejs"); //set the ejs engine
-
 app.get("/", async (request, response) => {
   if (request.user) {
     return response.redirect("/todos");
@@ -105,11 +91,8 @@ app.get("/", async (request, response) => {
   }
 });
 
-app.use(express.static(path.join(__dirname, "public"))); //for rendering static contents like css and js
-
 app.get(
   "/todos",
-  //for making session private
   connectEnsureLogin.ensureLoggedIn(),
   async (request, response) => {
     const loggedInUser = request.user.id;
@@ -118,33 +101,15 @@ app.get(
     const dueLaterItems = await Todo.dueLater(loggedInUser);
     const completedItems = await Todo.completed(loggedInUser);
 
-    if (request.accepts("html")) {
-      response.render("todos", {
-        title: "Todo application",
-        overdueItems,
-        dueTodayItems,
-        dueLaterItems,
-        completedItems,
-        csrfToken: request.csrfToken(),
-      }); //render the ejs  page to display
-    } else {
-      //for postman or other api checking
-      return response.json({
-        overdueItems,
-        dueTodayItems,
-        dueLaterItems,
-        completedItems,
-      });
-    }
+    return response.json({
+      overdueItems,
+      dueTodayItems,
+      dueLaterItems,
+      completedItems,
+      csrfToken: request.csrfToken(),
+    });
   },
 );
-
-app.get("/signup", (request, response) => {
-  response.render("signup", {
-    title: "Sign up",
-    csrfToken: request.csrfToken(),
-  });
-});
 
 app.post("/users", async (request, response) => {
   const hashedPwd = await bcrypt.hash(request.body.password, saltRounds);
@@ -155,8 +120,7 @@ app.post("/users", async (request, response) => {
       email: request.body.email,
       password: hashedPwd,
     });
-
-    //login is a method attached to request by passport
+    
     request.login(user, (err) => {
       if (err) {
         throw err;
@@ -164,20 +128,16 @@ app.post("/users", async (request, response) => {
       return response.redirect("/todos");
     });
   } catch (error) {
-    const msg = error.errors[0].message;
-    request.flash("error", msg);
-    return response.redirect("/signup");
+    return response.json(error);
   }
 });
 
 app.get("/login", (request, response) => {
-  response.render("login", {
-    title: "Login",
+  return response.json({
     csrfToken: request.csrfToken(),
   });
 });
 
-//next is a function that pass it to the next route handler
 app.get("/signout", (request, response, next) => {
   request.logout((err) => {
     if (err) {
@@ -189,10 +149,7 @@ app.get("/signout", (request, response, next) => {
 
 app.post(
   "/session",
-  passport.authenticate("local", {
-    failureRedirect: "/login",
-    failureFlash: true,
-  }),
+  passport.authenticate("local"),
   (request, response) => {
     return response.redirect("/todos");
   },
@@ -207,12 +164,10 @@ app.post(
       await Todo.addTodo({
         title: request.body.title,
         dueDate: request.body.dueDate,
-        userId: request.user.id, //request.user is a method attached by passport
+        userId: request.user.id,
       });
       return response.redirect("/todos");
     } catch (error) {
-      const msg = error.errors[0].message;
-      request.flash("error", msg);
       return response.redirect("/todos");
     }
   },
@@ -252,3 +207,4 @@ app.delete(
 );
 
 module.exports = app;
+
